@@ -48,6 +48,25 @@ def predict(
     )
 
 
+@router.post(
+    "/predict-random",
+    response_model=PredictionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Predict using a random test sample",
+)
+def predict_random(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Demo endpoint: sample random features server-side and predict.
+    """
+    return prediction_service.predict_random(
+        db=db,
+        user_id=current_user.user_id,
+    )
+
+
 # ==========================================================
 # Prediction History
 # ==========================================================

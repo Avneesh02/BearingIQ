@@ -12,6 +12,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { getActiveModel } from "../services/api";
+import { formatMetricPercent, withVerifiedMetrics } from "../utils/modelMetrics";
 
 function formatDate(dateString) {
   if (!dateString) {
@@ -56,7 +57,7 @@ function Metric({ label, value }) {
       </div>
 
       <p className="mt-4 text-3xl font-semibold tracking-[-0.07em] text-white">
-        {hasValue ? `${value}%` : "N/A"}
+        {hasValue ? formatMetricPercent(value) : "N/A"}
       </p>
 
       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
@@ -108,7 +109,7 @@ function Model() {
 
     try {
       const data = await getActiveModel();
-      setModel(data);
+      setModel(withVerifiedMetrics(data));
     } catch (err) {
       setError(err.message || "Failed to load model information.");
     } finally {
@@ -308,7 +309,7 @@ function Model() {
               Model performance.
             </h2>
             <p className="mt-2 text-sm text-[var(--text-2)]">
-              Current evaluation metrics for the active bearing diagnosis model.
+              Verified test-set metrics for the tuned Random Forest model (held-out evaluation).
             </p>
           </div>
           <Activity size={24} className="text-[var(--accent-bright)]" />

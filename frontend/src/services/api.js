@@ -57,6 +57,13 @@ export async function predictBearing(body) {
   });
 }
 
+export async function predictRandomBearing() {
+  return request("/api/prediction/predict-random", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 // Dashboard
 
 export async function getPredictionHistory() {

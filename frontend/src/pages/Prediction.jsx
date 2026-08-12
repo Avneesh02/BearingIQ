@@ -16,7 +16,7 @@ import {
   PenLine,
   Info,
 } from "lucide-react";
-import { predictBearing } from "../services/api";
+import { predictBearing, predictRandomBearing } from "../services/api";
 
 const TIME_DOMAIN = [
   { key: "Mean", label: "Mean", tip: "Average amplitude of the vibration signal" },
@@ -96,6 +96,25 @@ function getFaultConfig(prediction) {
 
 const REQUIRED_KEYS = ALL_FEATURES.map((feature) => feature.key);
 
+function isRandomDemoCSV(fileName, text) {
+  const normalizedName = fileName.trim().toLowerCase();
+
+  if (normalizedName.includes("random_demo") && normalizedName.endsWith(".csv")) {
+    return true;
+  }
+
+  const lines = text.trim().split(/\r?\n/);
+
+  if (lines.length < 2) {
+    return false;
+  }
+
+  const headers = lines[0].split(",").map((header) => header.trim());
+  const values = lines[1].split(",").map((value) => value.trim());
+
+  return headers[0] === "Mode" && values[0]?.toUpperCase() === "RANDOM";
+}
+
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
 
@@ -160,7 +179,7 @@ function Tooltip({ text }) {
   );
 }
 
-function FeatureInput({ feature, value, onChange }) {
+function FeatureInput({ feature, value, onChange, required = true }) {
   const hasValue = value !== "" && !Number.isNaN(Number(value));
 
   return (
@@ -182,7 +201,7 @@ function FeatureInput({ feature, value, onChange }) {
             ? "border-orange-300/35 bg-orange-400/[0.07] text-white shadow-[0_0_22px_rgba(255,107,53,0.07)]"
             : "border-white/[0.09] bg-white/[0.035] text-white/80 hover:border-white/20 hover:bg-white/[0.055]"
         }`}
-        required
+        required={required}
       />
     </label>
   );
@@ -332,6 +351,7 @@ export default function Prediction() {
   const [isDragging, setIsDragging] = useState(false);
   const [parseError, setParseError] = useState("");
   const [parseOk, setParseOk] = useState(false);
+  const [randomDemoMode, setRandomDemoMode] = useState(false);
   const inputRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
@@ -363,13 +383,25 @@ export default function Prediction() {
     setFile(selectedFile);
     setParseError("");
     setParseOk(false);
+    setRandomDemoMode(false);
     clearResult();
 
     const reader = new FileReader();
 
     reader.onload = (event) => {
       try {
-        const parsed = parseCSV(event.target.result);
+        const text = event.target.result;
+
+        if (isRandomDemoCSV(selectedFile.name, text)) {
+          setRandomDemoMode(true);
+          setFeatures(EMPTY_FEATURES);
+          setParseOk(true);
+          setActiveTab("csv");
+          return;
+        }
+
+        const parsed = parseCSV(text);
+        setRandomDemoMode(false);
         setFeatures(parsed);
         setParseOk(true);
         setActiveTab("manual");
@@ -391,6 +423,7 @@ export default function Prediction() {
     setFile(null);
     setParseError("");
     setParseOk(false);
+    setRandomDemoMode(false);
     setFeatures(EMPTY_FEATURES);
     clearResult();
 
@@ -401,22 +434,25 @@ export default function Prediction() {
 
   const filledCount = Object.values(features).filter((value) => value !== "").length;
   const allFilled = filledCount === ALL_FEATURES.length;
+  const canPredict = allFilled || randomDemoMode;
 
   async function handlePredict(event) {
-    event.preventDefault();
+    event?.preventDefault();
 
-    if (!allFilled) return;
+    if (!canPredict) return;
 
     setLoading(true);
     setApiError("");
     setResult(null);
 
-    const numericFeatures = Object.fromEntries(
-      Object.entries(features).map(([key, value]) => [key, parseFloat(value)])
-    );
-
     try {
-      const response = await predictBearing({ features: numericFeatures });
+      const response = randomDemoMode
+        ? await predictRandomBearing()
+        : await predictBearing({
+            features: Object.fromEntries(
+              Object.entries(features).map(([key, value]) => [key, parseFloat(value)])
+            ),
+          });
       setResult(response);
     } catch (err) {
       setApiError(err.message);
@@ -582,6 +618,18 @@ export default function Prediction() {
                       <p className="mt-2 text-sm text-white/35">
                         or <span className="text-[var(--accent-bright)]">click to browse</span> — requires all 17 feature columns
                       </p>
+                      <p className="mt-4 text-sm text-white/45">
+                        Want varied predictions?{" "}
+                        <a
+                          href="/random_demo.csv"
+                          download="random_demo.csv"
+                          className="text-[var(--accent-bright)] underline-offset-2 hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Download random_demo.csv
+                        </a>
+                        {" "}and upload it — each run picks a new random sample.
+                      </p>
                       <p className="mt-5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-[var(--text-3)]">
                         One header row · one data row
                       </p>
@@ -600,7 +648,8 @@ export default function Prediction() {
                       <div className="text-left">
                         <p className="text-sm font-semibold text-white">{file.name}</p>
                         <p className="mt-1 font-mono text-xs text-white/35">
-                          {(file.size / 1024).toFixed(1)} KB · ready to parse
+                          {(file.size / 1024).toFixed(1)} KB ·{" "}
+                          {randomDemoMode ? "random demo mode" : "ready to parse"}
                         </p>
                       </div>
                       <button
@@ -632,7 +681,45 @@ export default function Prediction() {
                   </motion.div>
                 )}
 
-                {parseOk && (
+                {parseOk && randomDemoMode && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-4 space-y-4"
+                  >
+                    <div className="flex items-start gap-3 rounded-xl border border-purple-300/20 bg-purple-400/[0.08] p-4 text-sm text-purple-100">
+                      <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-purple-300" />
+                      <span>
+                        Random demo ready. Click below — each run uses a new random sample. No manual feature input needed.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePredict}
+                      disabled={loading}
+                      className={`flex w-full items-center justify-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold transition-all duration-300 ${
+                        loading
+                          ? "cursor-wait border-orange-300/20 bg-orange-400/20 text-white/70"
+                          : "border-orange-300/70 bg-gradient-to-r from-[var(--accent-strong)] to-[var(--accent-bright)] text-[#180b06] shadow-[0_0_32px_rgba(255,107,53,0.25)] hover:-translate-y-0.5 hover:shadow-[0_0_42px_rgba(255,107,53,0.38)]"
+                      }`}
+                    >
+                      {loading ? (
+                        <>
+                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                          Analyzing bearing...
+                        </>
+                      ) : (
+                        <>
+                          <Zap size={18} />
+                          Run random prediction
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+                )}
+
+                {parseOk && !randomDemoMode && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -641,7 +728,7 @@ export default function Prediction() {
                   >
                     <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-300" />
                     <span>
-                      CSV parsed — {REQUIRED_KEYS.length} features loaded into the form. Switch to Manual Input to review or edit before predicting.
+                      {`CSV parsed — ${REQUIRED_KEYS.length} features loaded into the form. Switch to Manual Input to review or edit before predicting.`}
                     </span>
                   </motion.div>
                 )}
@@ -658,24 +745,37 @@ export default function Prediction() {
               transition={{ duration: 0.2 }}
             >
               <div className="mb-8 rounded-2xl border border-white/[0.07] bg-black/20 p-4">
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <span className="font-mono text-[0.65rem] uppercase tracking-[0.12em] text-white/40">
-                    Fields filled
-                  </span>
-                  <span className={`font-mono text-xs font-semibold ${filledCount === ALL_FEATURES.length ? "text-emerald-300" : "text-white/55"}`}>
-                    {filledCount} / {ALL_FEATURES.length}
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]">
-                  <motion.div
-                    animate={{ width: `${(filledCount / ALL_FEATURES.length) * 100}%` }}
-                    transition={{ duration: 0.3 }}
-                    className={`h-full rounded-full ${filledCount === ALL_FEATURES.length ? "bg-emerald-300 shadow-[0_0_16px_rgba(134,239,172,0.5)]" : "bg-gradient-to-r from-[var(--accent-strong)] to-[var(--accent-bright)] shadow-[0_0_16px_rgba(255,107,53,0.35)]"}`}
-                  />
-                </div>
+                {randomDemoMode ? (
+                  <div className="rounded-xl border border-purple-300/20 bg-purple-400/[0.08] p-4 text-sm text-purple-100">
+                    <p className="font-semibold text-purple-50">Random demo mode active</p>
+                    <p className="mt-2 text-purple-100/80">
+                      The uploaded CSV is a demo trigger only. Each prediction randomly samples new features on the server, so results will vary every time you click predict.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                      <span className="font-mono text-[0.65rem] uppercase tracking-[0.12em] text-white/40">
+                        Fields filled
+                      </span>
+                      <span className={`font-mono text-xs font-semibold ${filledCount === ALL_FEATURES.length ? "text-emerald-300" : "text-white/55"}`}>
+                        {filledCount} / {ALL_FEATURES.length}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]">
+                      <motion.div
+                        animate={{ width: `${(filledCount / ALL_FEATURES.length) * 100}%` }}
+                        transition={{ duration: 0.3 }}
+                        className={`h-full rounded-full ${filledCount === ALL_FEATURES.length ? "bg-emerald-300 shadow-[0_0_16px_rgba(134,239,172,0.5)]" : "bg-gradient-to-r from-[var(--accent-strong)] to-[var(--accent-bright)] shadow-[0_0_16px_rgba(255,107,53,0.35)]"}`}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
-              <form onSubmit={handlePredict}>
+              <form onSubmit={handlePredict} noValidate={randomDemoMode}>
+                {!randomDemoMode && (
+                  <>
                 <div className="mb-9">
                   <SectionHeading eyebrow="Signal analysis" title="Time domain features" icon="∿" />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -703,12 +803,14 @@ export default function Prediction() {
                     ))}
                   </div>
                 </div>
+                  </>
+                )}
 
                 <button
                   type="submit"
-                  disabled={loading || !allFilled}
+                  disabled={loading || !canPredict}
                   className={`flex w-full items-center justify-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold transition-all duration-300 ${
-                    !allFilled
+                    !canPredict
                       ? "cursor-not-allowed border-white/[0.08] bg-white/[0.05] text-white/25"
                       : loading
                       ? "cursor-wait border-orange-300/20 bg-orange-400/20 text-white/70"
@@ -723,7 +825,9 @@ export default function Prediction() {
                   ) : (
                     <>
                       <Zap size={18} />
-                      {allFilled
+                      {randomDemoMode
+                        ? "Run random prediction"
+                        : allFilled
                         ? "Run AI prediction"
                         : `Fill ${ALL_FEATURES.length - filledCount} more field${ALL_FEATURES.length - filledCount !== 1 ? "s" : ""} to predict`}
                     </>

@@ -8,7 +8,6 @@ Prediction Service
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import joblib
 import pandas as pd
@@ -189,7 +188,43 @@ class PredictionService:
             prediction_time=prediction_row.prediction_time,
         )
 
-         # ======================================================
+    # ======================================================
+    # Random Demo Prediction
+    # ======================================================
+
+    def predict_random(
+        self,
+        db: Session,
+        user_id: int,
+    ) -> PredictionResponse:
+        """
+        Pick a random feature row from the test dataset and predict.
+        Used by the frontend random demo CSV upload.
+        """
+        test_data_path = (
+            Path(__file__).resolve().parents[3]
+            / "data"
+            / "features"
+            / "test_features_selected.csv"
+        )
+
+        if not test_data_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Test feature dataset not found on server.",
+            )
+
+        test_df = pd.read_csv(test_data_path)
+        row = test_df.sample(n=1).iloc[0]
+        features = {name: float(row[name]) for name in self.feature_list}
+
+        return self.predict(
+            db=db,
+            user_id=user_id,
+            request=PredictionRequest(features=features),
+        )
+
+    # ======================================================
     # Prediction History
     # ======================================================
 

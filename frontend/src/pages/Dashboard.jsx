@@ -4,6 +4,7 @@ import {
   getActiveModel,
   getPredictionHistory,
 } from "../services/api";
+import { formatMetricPercent, withVerifiedMetrics } from "../utils/modelMetrics";
 
 function formatFaultLabel(prediction) {
   return prediction?.replace(/_/g, " ") ?? "";
@@ -45,7 +46,7 @@ function Dashboard() {
         getPredictionHistory(),
       ]);
 
-      setModel(modelData);
+      setModel(withVerifiedMetrics(modelData));
       setHistory(historyData);
     } catch (err) {
       setError(err.message || "Failed to load dashboard data.");
@@ -501,12 +502,12 @@ function Dashboard() {
             {[
               ["Model", model?.model_name ?? "N/A"],
               ["Algorithm", model?.algorithm ?? "N/A"],
-              ["Accuracy", model?.accuracy != null ? `${model.accuracy}%` : "N/A"],
+              ["Accuracy", formatMetricPercent(model?.accuracy)],
               ["Version", model?.version ?? "N/A"],
-              ["F1 score", model?.f1_score != null ? `${model.f1_score}%` : "N/A"],
-              ["Precision", model?.precision_score != null ? `${model.precision_score}%` : "N/A"],
-              ["Recall", model?.recall_score != null ? `${model.recall_score}%` : "N/A"],
-              ["Cross validation", model?.cross_validation_accuracy != null ? `${model.cross_validation_accuracy}%` : "N/A"],
+              ["F1 score", formatMetricPercent(model?.f1_score)],
+              ["Precision", formatMetricPercent(model?.precision_score)],
+              ["Recall", formatMetricPercent(model?.recall_score)],
+              ["Cross validation", formatMetricPercent(model?.cross_validation_accuracy)],
               ["Status", model?.is_active ? "Active" : "Inactive"],
             ].map(([label, value]) => (
               <div key={label} className="glass-subtle min-w-0 p-4">
