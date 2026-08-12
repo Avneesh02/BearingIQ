@@ -137,7 +137,7 @@ export function TopFeatureBar({ feature, value, maxValue }) {
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.7, ease: "easeOut" }}
-          className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500"
+          className="h-full rounded-full bg-linear-to-r from-purple-600 to-indigo-500"
         />
       </div>
     </div>
@@ -174,7 +174,7 @@ export function PredictionInsights({ result }) {
           borderColor: faultConfig.border,
         }}
       >
-        <div className="min-w-[190px] flex-1">
+        <div className="min-w-47.5 flex-1">
           <div className="mb-2 text-4xl">{faultConfig.icon}</div>
           <h2
             className="mb-1.5 text-2xl font-extrabold"
@@ -187,7 +187,7 @@ export function PredictionInsights({ result }) {
 
         <ConfidenceDial confidence={result.confidence} />
 
-        <div className="flex min-w-[150px] flex-col gap-3.5">
+        <div className="flex min-w-37.5 flex-col gap-3.5">
           {[
             ["Prediction ID", `#${result.prediction_id}`],
             ["Class Index", result.prediction_class],
